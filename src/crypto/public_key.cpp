@@ -72,9 +72,9 @@ namespace fc { namespace crypto {
       return _storage.visit(is_valid_visitor());
    }
 
-   std::string public_key::to_string(const fc::yield_function_t& yield) const
+   std::string public_key::to_string(const fc::time_point& deadline) const
    {
-      auto data_str = _storage.visit(base58str_visitor<storage_type, config::public_key_prefix, 0>(yield));
+      auto data_str = _storage.visit(base58str_visitor<storage_type, config::public_key_prefix, 0>(deadline));
 
       auto which = _storage.which();
       if (which == 0) {
@@ -106,9 +106,9 @@ namespace fc { namespace crypto {
 namespace fc
 {
    using namespace std;
-   void to_variant(const fc::crypto::public_key& var, fc::variant& vo, const fc::yield_function_t& yield)
+   void to_variant(const fc::crypto::public_key& var, fc::variant& vo, const fc::time_point& deadline)
    {
-      vo = var.to_string(yield);
+      vo = var.to_string(deadline);
    }
 
    void from_variant(const fc::variant& var, fc::crypto::public_key& vo)
