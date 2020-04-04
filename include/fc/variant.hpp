@@ -12,9 +12,9 @@
 
 #include <fc/optional.hpp>
 #include <fc/string.hpp>
+#include <fc/time.hpp>
 #include <fc/container/deque_fwd.hpp>
 #include <fc/container/flat_fwd.hpp>
-#include <fc/smart_ref_fwd.hpp>
 #include <boost/multi_index_container_fwd.hpp>
 
 #include <boost/multiprecision/cpp_int.hpp>
@@ -74,8 +74,6 @@ namespace fc
    template<typename T> void to_variant( const boost::multiprecision::number<T>& n, variant& v );
    template<typename T> void from_variant( const variant& v, boost::multiprecision::number<T>& n );
 
-   template<typename T> void to_variant( const smart_ref<T>& s, variant& v );
-   template<typename T> void from_variant( const variant& v, smart_ref<T>& s );
    template<typename T> void to_variant( const safe<T>& s, variant& v );
    template<typename T> void from_variant( const variant& v, safe<T>& s );
    template<typename T> void to_variant( const std::unique_ptr<T>& s, variant& v );
@@ -135,6 +133,11 @@ namespace fc
    void to_variant( const std::deque<T>& var,  variant& vo );
    template<typename T>
    void from_variant( const variant& var,  std::deque<T>& vo );
+
+   template<typename T, typename... U>
+   void to_variant( const boost::container::deque<T, U...>& d, fc::variant& vo );
+   template<typename T, typename... U>
+   void from_variant( const fc::variant& v, boost::container::deque<T, U...>& d );
 
    template<typename T>
    void to_variant( const std::set<T>& var,  variant& vo );
@@ -354,6 +357,8 @@ namespace fc
         template<typename T>
         explicit variant( const T& val );
 
+        template<typename T>
+        explicit variant( const T& val, const fc::yield_function_t& yield );
 
         void    clear();
       private:
@@ -519,6 +524,30 @@ namespace fc
       v = std::move(vars);
    }
 
+   /** @ingroup Serializable */
+   template<typename T, typename... U>
+   void from_variant( const variant& v, boost::container::deque<T, U...>& d )
+   {
+      const variants& vars = v.get_array();
+      if( vars.size() > MAX_NUM_ARRAY_ELEMENTS ) throw std::range_error( "too large" );
+      d.clear();
+      d.resize( vars.size() );
+      for( uint32_t i = 0; i < vars.size(); ++i ) {
+         from_variant( vars[i], d[i] );
+      }
+   }
+
+   /** @ingroup Serializable */
+   template<typename T, typename... U>
+   void to_variant( const boost::container::deque<T, U...>& d, fc::variant& vo )
+   {
+      if( d.size() > MAX_NUM_ARRAY_ELEMENTS ) throw std::range_error( "too large" );
+      variants vars(d.size());
+      for( size_t i = 0; i < d.size(); ++i ) {
+         vars[i] = variant( d[i] );
+      }
+      vo = std::move( vars );
+   }
 
    /** @ingroup Serializable */
    template<typename T>
@@ -589,6 +618,14 @@ namespace fc
       memset( this, 0, sizeof(*this) );
       to_variant( val, *this );
    }
+
+   template<typename T>
+   variant::variant( const T& val, const fc::yield_function_t& yield )
+   {
+      memset( this, 0, sizeof(*this) );
+      to_variant( val, *this, yield );
+   }
+
    #ifdef __APPLE__
    inline void to_variant( size_t s, variant& v ) { v = variant(uint64_t(s)); }
    #endif
@@ -633,12 +670,6 @@ namespace fc
 
    template<typename T>
    void from_variant( const variant& v, safe<T>& s ) { s.value = v.as_uint64(); }
-
-   template<typename T>
-   void to_variant( const smart_ref<T>& s, variant& v ) { v = *s; }
-
-   template<typename T>
-   void from_variant( const variant& v, smart_ref<T>& s ) { from_variant( v, *s ); }
 
    template<typename T, typename... Args> void to_variant( const boost::multi_index_container<T,Args...>& c, variant& v )
    {

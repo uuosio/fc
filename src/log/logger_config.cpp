@@ -6,6 +6,7 @@
 #include <string>
 #include <fc/log/console_appender.hpp>
 #include <fc/log/gelf_appender.hpp>
+#include <fc/log/dmlog_appender.hpp>
 #include <fc/reflect/variant.hpp>
 #include <fc/exception/exception.hpp>
 
@@ -59,6 +60,7 @@ namespace fc {
       try {
       static bool reg_console_appender = log_config::register_appender<console_appender>( "console" );
       static bool reg_gelf_appender = log_config::register_appender<gelf_appender>( "gelf" );
+      static bool reg_dmlog_appender = log_config::register_appender<dmlog_appender>( "dmlog" );
 
       std::lock_guard g( log_config::get().log_mutex );
       log_config::get().logger_map.clear();
@@ -87,11 +89,13 @@ namespace fc {
 
 
          for( auto a = cfg.loggers[i].appenders.begin(); a != cfg.loggers[i].appenders.end(); ++a ){
-            auto ap = log_config::get().appender_map[*a];
-            if( ap ) { lgr.add_appender(ap); }
+            auto ap_it = log_config::get().appender_map.find(*a);
+            if( ap_it != log_config::get().appender_map.end() ) {
+               lgr.add_appender(ap_it->second);
+            }
          }
       }
-      return reg_console_appender || reg_gelf_appender;
+      return reg_console_appender || reg_gelf_appender || reg_dmlog_appender;
       } catch ( exception& e )
       {
          std::cerr<<e.to_detail_string()<<"\n";
@@ -131,7 +135,7 @@ namespace fc {
 
    static thread_local std::string thread_name;
    void set_os_thread_name( const string& name ) {
-#ifdef __linux__
+#ifdef FC_USE_PTHREAD_NAME_NP
       pthread_setname_np( pthread_self(), name.c_str() );
 #endif
    }
@@ -140,7 +144,7 @@ namespace fc {
    }
    const string& get_thread_name() {
       if( thread_name.empty() ) {
-#ifdef __linux__
+#ifdef FC_USE_PTHREAD_NAME_NP
          char thr_name[64];
          int rc = pthread_getname_np( pthread_self(), thr_name, 64 );
          if( rc == 0 ) {
